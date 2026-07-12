@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Rotta — Obiettivi e Budget',
-        short_name: 'Rotta',
+        name: 'TARGET — Obiettivi e Budget',
+        short_name: 'TARGET',
         description: 'Gestione obiettivi a lungo termine e budget familiare in EUR/LEK',
         lang: 'it',
         theme_color: '#2563eb',

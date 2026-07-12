@@ -55,7 +55,7 @@ export default function Impostazioni() {
       if (data.app !== 'rotta') throw new Error()
       setImportData(data)
     } catch {
-      setMsg('⚠️ File non valido: seleziona un backup di Rotta (.json)')
+      setMsg('⚠️ File non valido: seleziona un backup di TARGET (.json)')
       setTimeout(() => setMsg(''), 3500)
     }
     e.target.value = ''
@@ -133,7 +133,7 @@ export default function Impostazioni() {
       </Card>
 
       <p className="text-center text-xs text-zinc-400 pb-4">
-        Rotta v1.0 — tutti i dati restano solo su questo dispositivo 🔒
+        TARGET v1.0 — tutti i dati restano solo su questo dispositivo 🔒
       </p>
 
       {pinFor && (

@@ -46,7 +46,7 @@ function Shell() {
     <div className="min-h-dvh bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50">
       <header className="sticky top-0 z-30 bg-zinc-100/90 dark:bg-zinc-950/90 backdrop-blur border-b border-zinc-200 dark:border-zinc-800">
         <div className="max-w-md mx-auto flex items-center justify-between px-4 py-3">
-          <h1 className="text-xl font-extrabold text-blue-600 dark:text-blue-400">Rotta</h1>
+          <h1 className="text-xl font-extrabold text-blue-600 dark:text-blue-400">TARGET</h1>
           <div className="flex items-center gap-2">
             <button onClick={() => setSwitcherOpen(true)}
               className="flex items-center gap-1.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-3 py-1.5 text-sm font-semibold">
