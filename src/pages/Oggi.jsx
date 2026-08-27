@@ -10,6 +10,23 @@ import { tasksForDate, countForDate } from '../logic/dayTasks.js'
 import { convert, fmtMoney, fmtNum } from '../logic/currency.js'
 import { Card, Segmented, Modal, Field, TextInput, Btn, Fab, EmptyState } from '../components/ui.jsx'
 
+const BLOCK_BG = {
+  blue:   'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500',
+  green:  'bg-emerald-50 dark:bg-emerald-900/20 border-l-4 border-emerald-500',
+  purple: 'bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500',
+  orange: 'bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500',
+  violet: 'bg-violet-50 dark:bg-violet-900/20 border-l-4 border-violet-500',
+  gray:   'bg-zinc-100 dark:bg-zinc-800 border-l-4 border-zinc-300 dark:border-zinc-600',
+}
+const BLOCK_GOAL = {
+  blue:   'text-blue-600 dark:text-blue-400',
+  green:  'text-emerald-600 dark:text-emerald-400',
+  purple: 'text-purple-600 dark:text-purple-400',
+  orange: 'text-orange-600 dark:text-orange-400',
+  violet: 'text-violet-600 dark:text-violet-400',
+  gray:   'text-zinc-500 dark:text-zinc-400',
+}
+
 export default function Oggi({ goToBudget }) {
   const { activeProfile, rate, displayCurrency } = useApp()
   const pid = activeProfile.id
@@ -19,6 +36,7 @@ export default function Oggi({ goToBudget }) {
   const [viewMonth, setViewMonth] = useState(monthKey(today))
   const [addOpen, setAddOpen] = useState(false)
   const [progressGoal, setProgressGoal] = useState(null)
+  const [phase, setPhase] = useState(1)
 
   // Intervallo dati: mese visualizzato ± una settimana (copre anche le viste oggi/settimana)
   const rangeStart = addDays(monthDates(viewMonth)[0], -7)
@@ -26,6 +44,9 @@ export default function Oggi({ goToBudget }) {
   const wk = weekDates(selectedDay)
   const lo = wk[0] < rangeStart ? wk[0] : rangeStart
   const hi = wk[6] > rangeEnd ? wk[6] : rangeEnd
+
+  const routineSetting = useLiveQuery(() => db.settings.get('routine'), [])
+  const routine = routineSetting?.value || null
 
   const recs = useLiveQuery(() => db.recurrences.where('profileId').equals(pid).toArray(), [pid]) || []
   const tasks = useLiveQuery(
@@ -69,7 +90,7 @@ export default function Oggi({ goToBudget }) {
       </Card>
 
       <Segmented value={view} onChange={(v) => { setView(v); if (v === 'oggi') setSelectedDay(today) }}
-        options={[{ value: 'oggi', label: 'Oggi' }, { value: 'settimana', label: 'Settimana' }, { value: 'mese', label: 'Mese' }]} />
+        options={[{ value: 'oggi', label: 'Oggi' }, { value: 'settimana', label: 'Settimana' }, { value: 'mese', label: 'Mese' }, { value: 'giornata', label: 'Giornata' }]} />
 
       {view === 'settimana' && (
         <div className="flex gap-1">
@@ -109,60 +130,112 @@ export default function Oggi({ goToBudget }) {
         </Card>
       )}
 
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-bold">
-            {selectedDay === today ? 'Task di oggi' : `Task del ${fmtDate(selectedDay)}`}
-          </h3>
-          <span className="text-sm text-zinc-500">{dayItems.filter(t => t.done).length}/{dayItems.length}</span>
-        </div>
-        {dayItems.length === 0 ? (
-          <EmptyState icon="🌤️" text="Nessun task per questo giorno. Goditi la giornata o aggiungine uno!" />
-        ) : (
-          <div className="space-y-2">
-            {dayItems.map((t, i) => {
-              const goal = goals.find(g => g.id === t.goalId)
-              return (
-                <Card key={t.id || 'v' + i} className="flex items-center gap-3 !py-3" onClick={() => toggle(t)}>
-                  <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-sm shrink-0 ${t.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-zinc-300 dark:border-zinc-600'}`}>
-                    {t.done ? '✓' : ''}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className={`font-medium ${t.done ? 'line-through text-zinc-400' : ''}`}>{t.title}</p>
-                    {goal && <p className="text-xs text-zinc-500 truncate">🎯 {goal.title}</p>}
-                  </div>
-                  {t.id && !t.recurrenceId && (
-                    <button onClick={(e) => { e.stopPropagation(); db.tasks.delete(t.id) }}
-                      className="text-zinc-400 px-2" aria-label="Elimina task">🗑️</button>
-                  )}
-                </Card>
-              )
-            })}
+      {view === 'giornata' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold">Giornata tipo (feriale)</h3>
+            <div className="flex gap-1">
+              {[1, 2].map(p => (
+                <button key={p} onClick={() => setPhase(p)}
+                  className={`px-3 py-1 rounded-full text-sm font-semibold ${phase === p ? 'bg-blue-600 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'}`}>
+                  Fase {p}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
-      </div>
+          {phase === 2 && (
+            <p className="text-xs text-zinc-500 -mt-2">Da novembre 2026: blocco AI al mattino, lavoro concentrato ridotto a 1h</p>
+          )}
+          {!routine ? (
+            <p className="text-sm text-zinc-400">Caricamento…</p>
+          ) : (
+            <div className="space-y-1.5">
+              {routine.daily.filter(b => b.phase.includes(phase)).map(b => (
+                <div key={b.id} className={`rounded-xl px-3 py-2.5 ${BLOCK_BG[b.color] || BLOCK_BG.gray}`}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="font-medium text-sm leading-snug">{b.label}</p>
+                    <span className="text-xs text-zinc-400 shrink-0 tabular-nums">{b.time}–{b.endTime}</span>
+                  </div>
+                  {b.goal && <p className={`text-xs mt-0.5 font-semibold ${BLOCK_GOAL[b.color] || BLOCK_GOAL.gray}`}>{b.goal}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+          <div>
+            <h4 className="font-semibold text-sm mb-2 text-zinc-500 uppercase tracking-wide">Blocchi settimanali</h4>
+            <div className="space-y-1.5">
+              {(routine?.weekly || []).map((b, i) => (
+                <div key={i} className={`rounded-xl px-3 py-2.5 ${BLOCK_BG[b.color] || BLOCK_BG.gray}`}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="font-medium text-sm">{b.label}</p>
+                    <span className={`text-xs font-semibold shrink-0 ${BLOCK_GOAL[b.color] || BLOCK_GOAL.gray}`}>{b.day}</span>
+                  </div>
+                  {b.goal && <p className={`text-xs mt-0.5 font-semibold ${BLOCK_GOAL[b.color] || BLOCK_GOAL.gray}`}>{b.goal}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
-      {numericGoals.length > 0 && (
-        <div>
-          <h3 className="font-bold mb-2">Progressi rapidi</h3>
-          <div className="space-y-2">
-            {numericGoals.map(g => {
-              const gl = logs.filter(l => l.goalId === g.id).sort((a, b) => a.date.localeCompare(b.date))
-              const current = gl.length ? gl.at(-1).value : g.startValue
-              return (
-                <Card key={g.id} className="flex items-center justify-between !py-3">
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{g.title}</p>
-                    <p className="text-xs text-zinc-500">
-                      Attuale: <b>{fmtNum(current, 1)} {g.unit}</b>{g.metricPeriod === 'month' ? ' questo mese' : ''} · Target: {fmtNum(g.targetValue, 1)} {g.unit}
-                    </p>
-                  </div>
-                  <Btn variant="secondary" className="!py-1.5 !px-3 text-sm shrink-0" onClick={() => setProgressGoal(g)}>Aggiorna</Btn>
-                </Card>
-              )
-            })}
+      {view !== 'giornata' && (
+        <>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold">
+                {selectedDay === today ? 'Task di oggi' : `Task del ${fmtDate(selectedDay)}`}
+              </h3>
+              <span className="text-sm text-zinc-500">{dayItems.filter(t => t.done).length}/{dayItems.length}</span>
+            </div>
+            {dayItems.length === 0 ? (
+              <EmptyState icon="🌤️" text="Nessun task per questo giorno. Goditi la giornata o aggiungine uno!" />
+            ) : (
+              <div className="space-y-2">
+                {dayItems.map((t, i) => {
+                  const goal = goals.find(g => g.id === t.goalId)
+                  return (
+                    <Card key={t.id || 'v' + i} className="flex items-center gap-3 !py-3" onClick={() => toggle(t)}>
+                      <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-sm shrink-0 ${t.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-zinc-300 dark:border-zinc-600'}`}>
+                        {t.done ? '✓' : ''}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className={`font-medium ${t.done ? 'line-through text-zinc-400' : ''}`}>{t.title}</p>
+                        {goal && <p className="text-xs text-zinc-500 truncate">🎯 {goal.title}</p>}
+                      </div>
+                      {t.id && !t.recurrenceId && (
+                        <button onClick={(e) => { e.stopPropagation(); db.tasks.delete(t.id) }}
+                          className="text-zinc-400 px-2" aria-label="Elimina task">🗑️</button>
+                      )}
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
           </div>
-        </div>
+
+          {numericGoals.length > 0 && (
+            <div>
+              <h3 className="font-bold mb-2">Progressi rapidi</h3>
+              <div className="space-y-2">
+                {numericGoals.map(g => {
+                  const gl = logs.filter(l => l.goalId === g.id).sort((a, b) => a.date.localeCompare(b.date))
+                  const current = gl.length ? gl.at(-1).value : g.startValue
+                  return (
+                    <Card key={g.id} className="flex items-center justify-between !py-3">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{g.title}</p>
+                        <p className="text-xs text-zinc-500">
+                          Attuale: <b>{fmtNum(current, 1)} {g.unit}</b>{g.metricPeriod === 'month' ? ' questo mese' : ''} · Target: {fmtNum(g.targetValue, 1)} {g.unit}
+                        </p>
+                      </div>
+                      <Btn variant="secondary" className="!py-1.5 !px-3 text-sm shrink-0" onClick={() => setProgressGoal(g)}>Aggiorna</Btn>
+                    </Card>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <Fab onClick={() => setAddOpen(true)} />

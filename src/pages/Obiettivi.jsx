@@ -13,6 +13,7 @@ export default function Obiettivi() {
   const pid = activeProfile.id
   const [wizardOpen, setWizardOpen] = useState(false)
   const [detailId, setDetailId] = useState(null)
+  const [statusFilter, setStatusFilter] = useState('active')
 
   const goals = useLiveQuery(() => db.goals.where('profileId').equals(pid).toArray(), [pid]) || []
   const milestones = useLiveQuery(() => db.milestones.toArray(), []) || []
@@ -24,34 +25,55 @@ export default function Obiettivi() {
     return <GoalDetail goalId={detailId} onBack={() => setDetailId(null)} />
   }
 
+  const filtered = goals.filter(g => {
+    const s = g.status || 'active'
+    if (statusFilter === 'active') return s === 'active'
+    if (statusFilter === 'paused') return s === 'paused'
+    return s !== 'removed'
+  })
+
   return (
     <div className="space-y-3">
       <h2 className="text-2xl font-bold">I tuoi obiettivi</h2>
-      {goals.length === 0 && <EmptyState icon="🎯" text="Nessun obiettivo ancora. Creane uno con il pulsante +" />}
-      {goals.map(g => {
+      <Segmented value={statusFilter} onChange={setStatusFilter} options={[
+        { value: 'active', label: 'Attivi' },
+        { value: 'paused', label: 'In pausa' },
+        { value: 'all',    label: 'Tutti' },
+      ]} />
+      {filtered.length === 0 && <EmptyState icon="🎯" text={statusFilter === 'paused' ? 'Nessun obiettivo in pausa.' : 'Nessun obiettivo ancora. Creane uno con il pulsante +'} />}
+      {filtered.map(g => {
+        const isPaused = (g.status || 'active') === 'paused'
         const stats = computeGoalStats(g, {
           logs: logs.filter(l => l.goalId === g.id),
           milestones: milestones.filter(m => m.goalId === g.id)
         }, today)
         const si = STATUS_INFO[stats.status]
         return (
-          <Card key={g.id} onClick={() => setDetailId(g.id)}>
+          <Card key={g.id} onClick={() => setDetailId(g.id)} className={isPaused ? 'opacity-60' : ''}>
             <div className="flex items-start justify-between gap-2 mb-1">
               <div className="min-w-0">
                 <p className="font-bold truncate">{g.title}</p>
-                <p className="text-xs text-zinc-500">{g.category} · entro {fmtDate(g.targetDate)}</p>
+                <p className="text-xs text-zinc-500">
+                  {g.category} · {isPaused
+                    ? `⏸ Fase 2${g.activeFrom ? ` · attivo da ${fmtDate(g.activeFrom)}` : ''}`
+                    : `entro ${fmtDate(g.targetDate)}`}
+                </p>
               </div>
-              <span className="text-lg shrink-0" title={si.label}>{si.emoji}</span>
+              <span className="text-lg shrink-0" title={isPaused ? 'In pausa' : si.label}>{isPaused ? '⏸' : si.emoji}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <ProgressBar pct={stats.pct} status={stats.status} className="flex-1" />
-              <span className="text-sm font-semibold tabular-nums">{Math.round(stats.pct * 100)}%</span>
-            </div>
-            {stats.requiredText && (
-              <p className="text-xs mt-1.5 text-zinc-600 dark:text-zinc-300">📈 {stats.requiredText}</p>
-            )}
-            {stats.unrealistic && (
-              <p className="text-xs mt-1 font-medium text-red-600 dark:text-red-400">⚠️ Ritmo irrealistico: valuta di rivedere la deadline</p>
+            {!isPaused && (
+              <>
+                <div className="flex items-center gap-2">
+                  <ProgressBar pct={stats.pct} status={stats.status} className="flex-1" />
+                  <span className="text-sm font-semibold tabular-nums">{Math.round(stats.pct * 100)}%</span>
+                </div>
+                {stats.requiredText && (
+                  <p className="text-xs mt-1.5 text-zinc-600 dark:text-zinc-300">📈 {stats.requiredText}</p>
+                )}
+                {stats.unrealistic && (
+                  <p className="text-xs mt-1 font-medium text-red-600 dark:text-red-400">⚠️ Ritmo irrealistico: valuta di rivedere la deadline</p>
+                )}
+              </>
             )}
           </Card>
         )
@@ -219,7 +241,11 @@ function GoalDetail({ goalId, onBack }) {
 
       <div className="flex gap-3 pt-2">
         <Btn variant="secondary" className="flex-1" onClick={() => setEditOpen(true)}>✏️ Modifica</Btn>
-        <Btn variant="danger" className="flex-1" onClick={() => setDelOpen(true)}>🗑️ Elimina</Btn>
+        <Btn variant="secondary" className="flex-1"
+          onClick={() => db.goals.update(goalId, { status: (goal.status || 'active') === 'paused' ? 'active' : 'paused' })}>
+          {(goal.status || 'active') === 'paused' ? '▶ Riattiva' : '⏸ Pausa'}
+        </Btn>
+        <Btn variant="danger" onClick={() => setDelOpen(true)}>🗑️</Btn>
       </div>
 
       <Confirm open={delOpen} onClose={() => setDelOpen(false)} onConfirm={deleteGoal}
@@ -365,7 +391,8 @@ function GoalWizard({ onClose, profileId }) {
     startDate: today, targetDate: addMonths(today, 6),
     type: 'numeric', startValue: '', targetValue: '', unit: '', metricPeriod: '',
     milestones: [], recurrences: [],
-    savingsChoice: 'none', savingsGoalId: '', newSavings: { name: '', target: '', currency: 'EUR' }
+    savingsChoice: 'none', savingsGoalId: '', newSavings: { name: '', target: '', currency: 'EUR' },
+    status: 'active', activeFrom: ''
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const [newCat, setNewCat] = useState('')
@@ -398,7 +425,9 @@ function GoalWizard({ onClose, profileId }) {
     }
     const goal = {
       profileId, title: f.title.trim(), description: f.description.trim(), category: f.category,
-      startDate: f.startDate, targetDate: f.targetDate, type: f.type, createdAt: today, savingsGoalId
+      startDate: f.startDate, targetDate: f.targetDate, type: f.type, createdAt: today, savingsGoalId,
+      status: f.status || 'active',
+      activeFrom: f.status === 'paused' && f.activeFrom ? f.activeFrom : null
     }
     if (f.type === 'numeric') {
       goal.startValue = num(f.startValue); goal.targetValue = num(f.targetValue); goal.unit = f.unit
@@ -454,6 +483,17 @@ function GoalWizard({ onClose, profileId }) {
             <Field label="Inizio"><TextInput type="date" value={f.startDate} onChange={e => set('startDate', e.target.value)} /></Field>
             <Field label="Deadline *"><TextInput type="date" value={f.targetDate} onChange={e => set('targetDate', e.target.value)} /></Field>
           </div>
+          <Field label="Stato">
+            <Segmented value={f.status} onChange={v => set('status', v)} options={[
+              { value: 'active', label: 'Attivo' },
+              { value: 'paused', label: 'In pausa (Fase 2)' }
+            ]} />
+          </Field>
+          {f.status === 'paused' && (
+            <Field label="Attivo da">
+              <TextInput type="date" value={f.activeFrom} onChange={e => set('activeFrom', e.target.value)} placeholder="es. 2026-11-01" />
+            </Field>
+          )}
         </>
       )}
 

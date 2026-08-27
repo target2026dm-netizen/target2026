@@ -18,6 +18,12 @@ db.version(1).stores({
   savingsDeposits: '++id, savingsGoalId, date'
 })
 
+db.version(2).stores({
+  goals: '++id, profileId, status'
+}).upgrade(tx =>
+  tx.table('goals').toCollection().modify(g => { if (!g.status) g.status = 'active' })
+)
+
 db.on('populate', (tx) => seed(tx))
 
 export const ALL_TABLES = [
